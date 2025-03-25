@@ -7,7 +7,7 @@ class MusicAPI {
   static const String baseUrl = "http://ws.audioscrobbler.com/2.0/";
 
   // Function to get songs based on mood
-  static Future<List<String>> getSongs(String mood) async {
+  static Future<List<Map<String, String>>> getSongs(String mood) async {
     final url = Uri.parse(
       "$baseUrl?method=tag.getTopTracks&tag=$mood&api_key=$apiKey&format=json",
     );
@@ -23,7 +23,12 @@ class MusicAPI {
           return [];
         }
         final tracks = data['tracks']['track'] as List;
-        return tracks.map((track) => track['name'] as String).toList();
+        return tracks.map((track) {
+          return {
+            "title": track['name'] as String,
+            "artist": track['artist']['name'] as String
+          };
+        }).toList();
       } else {
         throw Exception("Failed to load songs");
       }
