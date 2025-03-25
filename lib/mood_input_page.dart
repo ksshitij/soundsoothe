@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:soundsoothe/screens/music_page.dart'; // Import the music page
+import 'package:soundsoothe/music_page.dart'; // Import the music page
 
 class MoodInputPage extends StatefulWidget {
   @override
