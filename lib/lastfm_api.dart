@@ -2,8 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class MusicAPI {
-  static const String apiKey =
-      "3deffe7b1a1fc73b33cb8444751e6a43"; // Replace with your API Key
+  static const String apiKey = "3deffe7b1a1fc73b33cb8444751e6a43";
   static const String baseUrl = "http://ws.audioscrobbler.com/2.0/";
 
   // Function to get songs based on mood

@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:audioplayers/audioplayers.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'lastfm_api.dart';
 
 class MusicPage extends StatefulWidget {
@@ -13,10 +14,10 @@ class MusicPage extends StatefulWidget {
 }
 
 class _MusicPageState extends State<MusicPage> {
-  List<Map<String, String>> songs = [];
+  List<Map<String, String>> songs = []; // Fixed type issue
   bool isLoading = true;
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  String? currentlyPlayingUrl;
+  String? currentlyPlayingVideoId;
+  YoutubePlayerController? _youtubeController;
 
   @override
   void initState() {
@@ -26,94 +27,81 @@ class _MusicPageState extends State<MusicPage> {
 
   Future<void> fetchSongs() async {
     final results = await MusicAPI.getSongs(widget.mood);
+    print("Fetched Songs: $results"); // Debugging output
+
     setState(() {
-      songs = results;
+      songs = results; // Now correctly storing List<Map<String, String>>
       isLoading = false;
     });
   }
 
-  Future<String?> fetchSongUrl(String title, String artist) async {
-    final encodedTitle = Uri.encodeComponent(title);
-    final encodedArtist = Uri.encodeComponent(artist);
-    final url = Uri.parse(
-        "https://saavn.dev/api/search/songs?query=$encodedTitle $encodedArtist");
-
+  Future<String?> fetchYouTubeVideoId(String query) async {
+    final yt = YoutubeExplode();
     try {
-      final response = await http.get(url);
-      print("JioSaavn API Response: ${response.body}"); // 🔍 Debugging line
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data["data"].isNotEmpty) {
-          return data["data"][0]["downloadUrl"][0]["url"]; // ✅ Correct URL
-        }
-      }
+      final searchResults = await yt.search.getVideos(query);
+      return searchResults.isNotEmpty ? searchResults.first.id.value : null;
     } catch (e) {
-      print("Error fetching song URL: $e");
+      print("Error fetching YouTube video ID: $e");
+      return null;
+    } finally {
+      yt.close();
     }
-    return null;
   }
 
-  void playSong(String title, String artist) async {
-    String? songUrl = await fetchSongUrl(title, artist);
-    if (songUrl != null) {
-      print("Playing song: $songUrl"); // 🔍 Debugging line
-      await _audioPlayer.play(UrlSource(songUrl));
+  void playSong(String songTitle) async {
+    String? videoId = await fetchYouTubeVideoId(songTitle);
+    if (videoId != null) {
       setState(() {
-        currentlyPlayingUrl = songUrl;
+        currentlyPlayingVideoId = videoId;
+        _youtubeController?.dispose();
+        _youtubeController = YoutubePlayerController(
+          initialVideoId: videoId,
+          flags: YoutubePlayerFlags(autoPlay: true, mute: false),
+        );
       });
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Song not available")),
+        SnackBar(content: Text("Could not find a YouTube video for this song")),
       );
     }
   }
 
-  void stopSong() {
-    _audioPlayer.stop();
-    setState(() {
-      currentlyPlayingUrl = null;
-    });
+  @override
+  void dispose() {
+    _youtubeController?.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text("Songs for ${widget.mood}")),
-      body: isLoading
-          ? Center(child: CircularProgressIndicator())
-          : songs.isEmpty
-              ? Center(child: Text("No songs found for this mood."))
-              : ListView.builder(
-                  itemCount: songs.length,
-                  itemBuilder: (context, index) {
-                    final song = songs[index];
-                    return ListTile(
-                      title: Text(song["title"]!),
-                      subtitle: Text(song["artist"]!),
-                      trailing: IconButton(
-                        icon: Icon(
-                          currentlyPlayingUrl == song["title"]
-                              ? Icons.pause
-                              : Icons.play_arrow,
-                        ),
-                        onPressed: () {
-                          if (currentlyPlayingUrl == song["title"]) {
-                            stopSong();
-                          } else {
-                            playSong(song["title"]!, song["artist"]!);
-                          }
+      body: Column(
+        children: [
+          if (currentlyPlayingVideoId != null && _youtubeController != null)
+            YoutubePlayer(controller: _youtubeController!),
+          Expanded(
+            child: isLoading
+                ? Center(child: CircularProgressIndicator())
+                : songs.isEmpty
+                    ? Center(child: Text("No songs found for this mood."))
+                    : ListView.builder(
+                        itemCount: songs.length,
+                        itemBuilder: (context, index) {
+                          final songTitle =
+                              songs[index]["title"] ?? "Unknown Title";
+                          return ListTile(
+                            title: Text(songTitle),
+                            trailing: IconButton(
+                              icon: Icon(Icons.play_arrow),
+                              onPressed: () => playSong(songTitle),
+                            ),
+                          );
                         },
                       ),
-                    );
-                  },
-                ),
+          ),
+        ],
+      ),
     );
-  }
-
-  @override
-  void dispose() {
-    _audioPlayer.dispose();
-    super.dispose();
   }
 }
